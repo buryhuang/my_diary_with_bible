@@ -1,0 +1,70 @@
+services:
+  worker_magicclip_notification_consumer:
+    &worker_magicclip
+    build: .
+    volumes:
+      - ./app:/server/app
+      - ./data:/data
+      - ./overlay:/server/overlay
+      - .aws/:/root/.aws
+    environment:
+      - C_FORCE_ROOT=true
+      - AWS_DEFAULT_PROFILE=artsio
+      - DYNAMO_TABLE
+      - OPENAI_API_KEY
+    env_file:
+      - .env
+    command: ["celery", "-A", "app.celery_consumer.app", "worker", "-l", "info"]
+    deploy: 
+      replicas: 1
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+  
+  worker_magicclip:
+    <<: *worker_magicclip
+    command: ["celery", "-A", "app.celery_app.app", "worker", "-l", "info", "-P", "threads", "--concurrency", "4"]
+    deploy: 
+      replicas: 1
+
+  opensearch-single-node: # This is also the hostname of the container within the Docker network (i.e. https://opensearch-node1/)
+    image: opensearchproject/opensearch:latest # Specifying the latest available image - modify if you want a specific version
+    container_name: opensearch-node1
+    environment:
+      - cluster.name=opensearch-cluster # Name the cluster
+      - node.name=opensearch-node1 # Name the node that will run in this container
+      - discovery.type=single-node # This is a single node cluster
+      - bootstrap.memory_lock=true # Disable JVM heap memory swapping
+      - plugins.security.disabled=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" # Set min and max JVM heap sizes to at least 50% of system RAM
+    ulimits:
+      memlock:
+        soft: -1 # Set memlock to unlimited (no soft or hard limit)
+        hard: -1
+      nofile:
+        soft: 65536 # Maximum number of open files for the opensearch user - set to at least 65536
+        hard: 65536
+    ports:
+      - 9200:9200 # REST API
+      - 9600:9600 # Performance Analyzer
+    volumes:
+      - ./opensearch-data/data:/usr/share/opensearch/data
+      - ./opensearch-data/tmp:/tmp
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:latest
+    container_name: opensearch-dashboards
+    ports:
+      - 5601:5601 # Map host port 5601 to container port 5601
+    expose:
+      - "5601" # Expose port 5601 for web access to OpenSearch Dashboards
+    environment:
+      - 'OPENSEARCH_HOSTS=["http://opensearch-node1:9200"]'
+      - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true"
