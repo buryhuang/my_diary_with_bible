@@ -1,0 +1,18 @@
+{
+    "schema_version": "v1",
+    "name_for_human": "Chat with Bible",
+    "name_for_model": "chatbible",
+    "description_for_human": "Chat with Bible, seek advices and stories from the Bible.",
+    "description_for_model": "Converse with user input to provide life guidance, action advices. Full Bible text stored in vector database using openai embeddings. Bible verses are matched to user input and intention.",
+    "auth": {
+        "type": "none"
+    },
+    "api": {
+        "type": "openapi",
+        "url": "https://api.art-tribute.org/.well-known/openapi.yaml",
+        "is_user_authenticated": false
+    },
+    "logo_url": "https://github.com/buryhuang/gpt4-image-inputs/raw/main/trubute_icon_only.png",
+    "contact_email": "admin@art-tribute.org",
+    "legal_info_url": "https://github.com/buryhuang/tribute/blob/main/tribute_privacy.md"
+}

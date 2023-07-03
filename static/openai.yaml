@@ -1,0 +1,43 @@
+openapi: 3.0.0
+info:
+  title: Chat with Bible
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000
+paths:
+  /load:
+    post:
+      summary: Load the chatbot model
+      responses:
+        '200':
+          description: Indexing completed
+  /chat:
+    post:
+      summary: Chat with Bible
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                  description: The ID of the user
+                query:
+                  type: string
+                  description: The user's message
+              required:
+                - user_id
+                - query
+      responses:
+        '200':
+          description: The bot's response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  response:
+                    type: string
+                    description: The bot's response
