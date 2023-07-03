@@ -7,10 +7,14 @@ from botocore.exceptions import NoCredentialsError
 import os
 import hashlib
 from llama_index import SimpleDirectoryReader
+from llama_index.chat_engine import CondenseQuestionChatEngine
+from llama_index.chat_engine.types import ChatMode
 from llama_index.vector_stores import OpensearchVectorStore, OpensearchVectorClient
 from llama_index import VectorStoreIndex, StorageContext
 from os import getenv
 import sys
+from llama_index.prompts import Prompt
+
 # import open_clip
 # from PIL import Image
 # import torch
@@ -207,19 +211,43 @@ def store_job_json_to_s3(job_json, bucket_name, job_input):
     return s3_url
 
 
+def persist_context(chat_history):
+    chat_history_dict = []
+    for (human_msg, agent_message) in chat_history:
+        chat_history_dict.append({
+            "human_message": human_msg,
+            "agent_message": agent_message
+        })
+    with open("chat_history.json", "w") as f:
+        f.write(json.dumps(chat_history_dict))
+
+
+def load_context():
+    try:
+        with open("chat_history.json", "r") as f:
+            chat_history_dict = json.loads(f.read())
+        chat_history = []
+        for item in chat_history_dict:
+            chat_history.append((item["human_message"], item["agent_message"]))
+    except:
+        chat_history = []
+    return chat_history
+
+
 def main(args):
     if args.images_folder_path:
         process_images_folder(args.images_folder_path)
         sys.exit(0)
 
-    if args.llmindex:
+    if args.load:
         endpoint = getenv("OPENSEARCH_ENDPOINT", "http://localhost:9200")
         idx = getenv("OPENSEARCH_INDEX", "buryhuang-gpt-index-demo")
         client = OpensearchVectorClient(endpoint, idx, 1536, embedding_field="embedding", text_field="content")
         vector_store = OpensearchVectorStore(client)
         for file in os.listdir('llmindex_docs/output'):
             print(f"Indexing {file}")
-            documents = SimpleDirectoryReader(input_files=[f'llmindex_docs/output/{file}'], filename_as_id=True).load_data()
+            documents = SimpleDirectoryReader(input_files=[f'llmindex_docs/output/{file}'],
+                                              filename_as_id=True).load_data()
             storage_context = StorageContext.from_defaults(vector_store=vector_store)
             VectorStoreIndex.from_documents(documents=documents, storage_context=storage_context)
         sys.exit(0)
@@ -230,23 +258,84 @@ def main(args):
         client = OpensearchVectorClient(endpoint, idx, 1536, embedding_field="embedding", text_field="content")
         vector_store = OpensearchVectorStore(client)
         index = VectorStoreIndex.from_vector_store(vector_store)
-        current_session = []
+        custom_chat_history = load_context()
         try:
             while True:
                 query_str = input("Enter your question: ")
-                current_session.append("I asked: " + query_str)
                 query_engine = index.as_query_engine()
-                res = query_engine.query(query_str)
-                current_session.append("Agent answered: " + res.response)
+
+                chat_history_in_prompt = ""
+                for (human_msg, agent_message) in custom_chat_history:
+                    chat_history_in_prompt += f"Human: {human_msg}\nAgent: {agent_message}\n"
+
+                custom_prompt = f"""\
+                    Given a conversation (between Human and Assistant) and a follow up message from Human, \
+                    continue the conversation that captures all relevant context \
+                    from the chat history.
+    
+                    <Chat History> 
+                    {chat_history_in_prompt}
+    
+                    <Follow Up Message>
+                    {query_str}
+                """
+
+                # print(custom_prompt)
+
+                res = query_engine.query(custom_prompt)
+                custom_chat_history.append((query_str, res.response))
                 print(res.response)
+                persist_context(custom_chat_history)
         except KeyboardInterrupt:
             print("Saving chat sessions...")
-            with open("current_session.txt", "w") as f:
-                f.write("\n".join(current_session))
-            documents = SimpleDirectoryReader(input_files=['current_session.txt']).load_data()
-            storage_context = StorageContext.from_defaults(vector_store=vector_store)
-            VectorStoreIndex.from_documents(documents=documents, storage_context=storage_context)
+            persist_context(custom_chat_history)
             print("Chat sessions saved. Exiting...")
+        sys.exit(0)
+
+    if args.chat:
+        endpoint = getenv("OPENSEARCH_ENDPOINT", "http://localhost:9200")
+        idx = getenv("OPENSEARCH_INDEX", "buryhuang-gpt-index-demo")
+        client = OpensearchVectorClient(endpoint, idx, 1536, embedding_field="embedding", text_field="content")
+        vector_store = OpensearchVectorStore(client)
+        index = VectorStoreIndex.from_vector_store(vector_store)
+
+        custom_prompt = Prompt("""\
+        Given a conversation (between Human and Assistant) and a follow up message from Human, \
+        continue the conversation that captures all relevant context \
+        from the chat history.
+
+        <Chat History> 
+        {chat_history}
+
+        <Follow Up Message>
+        {question}
+
+        """)
+
+        # list of (human_message, ai_message) tuples
+        custom_chat_history = load_context()
+
+        query_engine = index.as_query_engine()
+        chat_engine = CondenseQuestionChatEngine.from_defaults(
+            query_engine=query_engine,
+            condense_question_prompt=custom_prompt,
+            chat_history=custom_chat_history,
+            verbose=True
+        )
+
+        chat_history = []
+        try:
+            while True:
+                query_str = input("\nYou: ")
+                res = chat_engine.chat(query_str)
+                custom_chat_history.append((query_str, res.response))
+                print(res.response)
+                persist_context(custom_chat_history)
+        except KeyboardInterrupt:
+            print("Saving chat sessions...")
+            persist_context(chat_history)
+            print("Chat sessions saved. Exiting...")
+
         sys.exit(0)
 
     if args.video_id:
@@ -317,8 +406,9 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--provider', type=str, choices=["azure", "aws", "videochat"],
                         help='The provider to get video metadata from')
     parser.add_argument('-j', '--job_json', action='store_true', help='Create and store job JSON for the video')
-    parser.add_argument('-l', '--llmindex', action='store_true', help='LLM Index the video')
+    parser.add_argument('-l', '--load', action='store_true', help='Create LLM Index from local metafiles')
     parser.add_argument('-q', '--query', action='store_true', help='Query the LLM index')
+    parser.add_argument('-c', '--chat', action='store_true', help='Chat with the LLM index')
     parser.add_argument('-d', '--images_folder_path', type=str, help='The path to the folder containing the images')
     args = parser.parse_args()
     main(args)
