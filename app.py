@@ -40,11 +40,12 @@ def chat():
     # Append new query to chat history
     chat_history.append((query, ""))
 
-    # Save chat history for user_id
-    persist_context(user_id, chat_history)
-
     # Process the query
     response = process_query(query, chat_history)
+
+    # Save chat history for user_id
+    chat_history.append((query, response))
+    persist_context(user_id, chat_history)
 
     return response
 
@@ -99,7 +100,7 @@ def process_query(query, chat_history):
         Human: {query}
     """
 
-    query_engine = index.as_query_engine()
+    query_engine = index.as_query_engine(service_context=service_context, similarity_top_k=5, streaming=False)
     res = query_engine.query(custom_prompt)
     return res.response
 
