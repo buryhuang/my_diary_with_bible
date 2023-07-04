@@ -37,8 +37,7 @@ def chat():
     # Load chat history for user_id
     chat_history = load_context(user_id)
 
-    # Append new query to chat history
-    chat_history.append((query, ""))
+    print(chat_history)
 
     # Process the query
     response = process_query(query, chat_history)
@@ -47,7 +46,7 @@ def chat():
     chat_history.append((query, response))
     persist_context(user_id, chat_history)
 
-    return response
+    return { 'response': response }, 200
 
 
 def persist_context(user_id, chat_history):
@@ -102,7 +101,7 @@ def process_query(query, chat_history):
 
     query_engine = index.as_query_engine(service_context=service_context, similarity_top_k=5, streaming=False)
     res = query_engine.query(custom_prompt)
-    return json.dumps({"response": res.response})
+    return res.response
 
 
 if __name__ == '__main__':
