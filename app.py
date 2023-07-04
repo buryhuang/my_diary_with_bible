@@ -37,8 +37,6 @@ def chat():
     # Load chat history for user_id
     chat_history = load_context(user_id)
 
-    print(chat_history)
-
     # Process the query
     response = process_query(query, chat_history)
 
