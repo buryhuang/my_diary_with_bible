@@ -102,7 +102,7 @@ def process_query(query, chat_history):
 
     query_engine = index.as_query_engine(service_context=service_context, similarity_top_k=5, streaming=False)
     res = query_engine.query(custom_prompt)
-    return res.response
+    return json.dumps({"response": res.response})
 
 
 if __name__ == '__main__':
