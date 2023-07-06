@@ -10,6 +10,9 @@ curl -XPUT -H "Content-Type: application/json" http://localhost:9200/_all/_setti
 
 ## Run the service
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install flask flask_cors llama_index
 flask run
 ```
 
@@ -17,5 +20,6 @@ flask run
 ```bash
 cd web
 npm install
-npm run dev
+npm run build
+npm run start
 ```
