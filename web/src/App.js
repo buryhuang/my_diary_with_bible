@@ -4,6 +4,8 @@ import Cookies from 'js-cookie';
 import Chat, { Bubble, useMessages, Input, Button, Text } from '@chatui/core';
 import '@chatui/core/dist/index.css';
 
+const COOKIE_KEY = 'my_diary_with_bible_username'
+
 const Form = ({
   saveUsername
 }) => {
@@ -14,7 +16,7 @@ const Form = ({
       <Input maxLength={20} value={username} onChange={val => setUsername(val)} placeholder="Please type your user name..." />
       <Text breakWord>This is a hackathon project, username is stored in the cookies, please set a secret name and keep it private. </Text>
       <Button color="primary" onClick={() => {
-        Cookies.set('username', username)
+        Cookies.set(COOKIE_KEY, username)
         saveUsername(username)
       }}>Save</Button>
     </div>
@@ -22,7 +24,7 @@ const Form = ({
 }
 
 const App = () => {
-  const [username, setUsername] = useState(Cookies.get('username'));
+  const [username, setUsername] = useState(Cookies.get(COOKIE_KEY));
   const hasUsername = !!username
   const { messages, appendMsg, setTyping } = useMessages([]);
 
