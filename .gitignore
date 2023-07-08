@@ -41,3 +41,12 @@ next-env.d.ts
 pnpm-lock.yaml
 
 **/chat_history.json
+
+# opensearch
+opensearch-data/
+
+# python
+__pycache__
+
+# prompt
+chat_history_*.json
